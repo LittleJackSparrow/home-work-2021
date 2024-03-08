@@ -65,10 +65,11 @@ def save_pred(preds, file):
 config = {
     'n_epochs': 3000,  # maximum number of epochs
     'batch_size': 270,  # mini-batch size for dataloader
-    'optimizer': 'SGD',  # optimization algorithm (optimizer in torch.optim)
+    'optimizer': 'AdamW',  # optimization algorithm (optimizer in torch.optim)
     'optim_hparas': {  # hyper-parameters for the optimizer (depends on which optimizer you are using)
         'lr': 0.001,  # learning rate of SGD
-        'momentum': 0.9  # momentum for SGD
+        # 'momentum': 0.95,  # momentum for SGD Adam不需要单独设置动量
+        'weight_decay': 0.001
     },
     'early_stop': 200,  # early stopping epochs (the number epochs since your model's last improvement)
     'save_path': 'models/model.pth'  # your model will be saved here
@@ -77,15 +78,16 @@ config = {
 if __name__ == '__main__':
     device = get_device()  # get the current available device ('cpu' or 'cuda')
     os.makedirs('models', exist_ok=True)  # The trained model will be saved to ./models/
-    target_only = False  # TODO: Using 40 states & 2 tested_positive features
+    # target_only = False  # TODO: Using 40 states & 2 tested_positive features
+    target_only = True
     tr_path = "D:/01-workspace/github/home-work-2021/dataset/01-covid/covid.train.csv"
     tt_path = "D:/01-workspace/github/home-work-2021/dataset/01-covid/covid.test.csv"
     tr_set = prep_dataloader(tr_path, 'train', config['batch_size'], target_only=target_only)
     dv_set = prep_dataloader(tr_path, 'dev', config['batch_size'], target_only=target_only)
     tt_set = prep_dataloader(tt_path, 'test', config['batch_size'], target_only=target_only)
-
+    # Model的features为数据的features的长度
     model = NeuralNet(tr_set.dataset.dim).to(device)  # Construct model and move to device
-
+    # 训练并验证
     model_loss, model_loss_record = train(tr_set, dv_set, model, config, device)
 
     plot_learning_curve(model_loss_record, title='deep model')
@@ -95,6 +97,6 @@ if __name__ == '__main__':
     ckpt = torch.load(config['save_path'], map_location='cpu')  # Load your best model
     model.load_state_dict(ckpt)
     plot_pred(dv_set, model, device)  # Show prediction on the validation set
-
-    preds = test(tt_set, model, device)  # predict COVID-19 cases with your model
-    save_pred(preds, 'D:/01-workspace/github/home-work-2021/dataset/01-covid/pred.csv')  # save prediction file to pred.csv
+    #
+    # preds = test(tt_set, model, device)  # predict COVID-19 cases with your model
+    # save_pred(preds, 'D:/01-workspace/github/home-work-2021/dataset/01-covid/pred.csv')  # save prediction file to pred.csv
