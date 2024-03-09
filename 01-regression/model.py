@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from transformers import AdamW, get_linear_schedule_with_warmup
 
 
 class NeuralNet(nn.Module):
@@ -11,14 +10,26 @@ class NeuralNet(nn.Module):
 
         # Define your neural network here
         # TODO: How to modify this model to achieve better performance?
-        # 定义模型的层级，先是经过一个Linear层，然后经过ReLU函数，最后输出到Linear，得到一个scalar
         self.net = nn.Sequential(
-            nn.Linear(input_dim, 64),
-            nn.ReLU(),
-            nn.Linear(64, 16),
+            nn.Linear(input_dim, 16),
+            # 将输出批量归一化
+            nn.BatchNorm1d(16),
+            # 20%的概率随机将输入张量中的部分元素置0
+            nn.Dropout(p=0.2),
             nn.ReLU(),
             nn.Linear(16, 1)
+            # nn.Linear(input_dim, 128),
+            # # nn.BatchNorm1d(128),
+            # nn.ReLU(),
+            # nn.Linear(128, 64),  # 0.98
+            # nn.ReLU(),
+            # nn.Linear(64, 32),  # 0.97
+            # nn.ReLU(),
+            # nn.Linear(32, 8),
+            # nn.ReLU(),
+            # nn.Linear(8, 1)
         )
+        # 定义模型的层级，先是经过一个Linear层，然后经过ReLU函数，最后输出到Linear，得到一个scalar
         # 定义损失函数
         # reduction=none，返回给个样本的损失值
         # reduction=mean，返回所有样本损失值的均值
@@ -35,7 +46,16 @@ class NeuralNet(nn.Module):
         """ Calculate loss """
         # TODO: you may implement L2 regularization here
         # L2正则化的目的是限制模型参数的大小，使其不能太大，从而避免模型过度拟合训练数据
-        return self.criterion(pred, target)
+        # 定义正则化系数
+        loss = self.criterion(pred, target)
+
+        lambda_reg = 0.00075
+        # 计算L2正则化项
+        l2_reg = torch.tensor(0.)
+        for param in self.net.parameters():
+            l2_reg += torch.norm(param, p=2)
+        loss += lambda_reg * l2_reg
+        return loss
 
 
 def train(tr_set, dv_set, model, config, device):
@@ -46,8 +66,11 @@ def train(tr_set, dv_set, model, config, device):
     # Setup optimizer
     # getattr(torch.optim, config['optimizer'])：根据配置定义优化器
     # (model.parameters(), **config['optim_hparas'])：设置优化器的参数
+    # 统计模型参数数量
+    total_params = sum(p.numel() for p in model.parameters())
+    print("Total parameters in the model: ", total_params)
     optimizer = getattr(torch.optim, config['optimizer'])(model.parameters(), **config['optim_hparas'])
-    scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=160, num_training_steps=n_epochs * len(tr_set))
+    # scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=160, num_training_steps=n_epochs * len(tr_set))
     min_mse = 1000.
     loss_record = {'train': [], 'dev': []}  # for recording training loss
     early_stop_cnt = 0
@@ -61,7 +84,7 @@ def train(tr_set, dv_set, model, config, device):
             mse_loss = model.cal_loss(pred, y)  # 计算损失 compute loss
             mse_loss.backward()  # 反向传播 compute gradient (backpropagation)
             optimizer.step()  # 更新参数 update model with optimizer
-            scheduler.step()
+            # scheduler.step()
             loss_record['train'].append(mse_loss.detach().cpu().item())  # detach：将损失值提取出来，不包含梯度；cpu：将数据放到cpu上；item：取值
         # print(f"train loss:{loss_record['train'][-1]}")
 

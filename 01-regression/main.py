@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import torch
 from matplotlib.pyplot import figure
 
-from dataset import prep_dataloader
+from dataset import prep_dataloader, select_features
 from model import NeuralNet, train, test
 from utils.settings import get_device
 
@@ -63,13 +63,13 @@ def save_pred(preds, file):
 
 # TODO: How to tune these hyper-parameters to improve your model's performance?
 config = {
-    'n_epochs': 3000,  # maximum number of epochs
-    'batch_size': 270,  # mini-batch size for dataloader
-    'optimizer': 'AdamW',  # optimization algorithm (optimizer in torch.optim)
+    'n_epochs': 5000,  # maximum number of epochs
+    'batch_size': 200,  # mini-batch size for dataloader
+    'optimizer': 'Adam',  # optimization algorithm (optimizer in torch.optim) AdamW
     'optim_hparas': {  # hyper-parameters for the optimizer (depends on which optimizer you are using)
-        'lr': 0.001,  # learning rate of SGD
-        # 'momentum': 0.95,  # momentum for SGD Adam不需要单独设置动量
-        'weight_decay': 0.001
+        'lr': 0.0005  # learning rate of SGD 0.000988 AdamW 0.002
+        # 'momentum': 0.9  # momentum for SGD Adam不需要单独设置动量
+        # 'weight_decay': 0.001
     },
     'early_stop': 200,  # early stopping epochs (the number epochs since your model's last improvement)
     'save_path': 'models/model.pth'  # your model will be saved here
@@ -82,9 +82,10 @@ if __name__ == '__main__':
     target_only = True
     tr_path = "D:/01-workspace/github/home-work-2021/dataset/01-covid/covid.train.csv"
     tt_path = "D:/01-workspace/github/home-work-2021/dataset/01-covid/covid.test.csv"
-    tr_set = prep_dataloader(tr_path, 'train', config['batch_size'], target_only=target_only)
-    dv_set = prep_dataloader(tr_path, 'dev', config['batch_size'], target_only=target_only)
-    tt_set = prep_dataloader(tt_path, 'test', config['batch_size'], target_only=target_only)
+    feature_index_list = select_features(tr_path)
+    tr_set = prep_dataloader(tr_path, feature_index_list, 'train', config['batch_size'], target_only=target_only)
+    dv_set = prep_dataloader(tr_path, feature_index_list, 'dev', config['batch_size'], target_only=target_only)
+    tt_set = prep_dataloader(tt_path, feature_index_list, 'test', config['batch_size'], target_only=target_only)
     # Model的features为数据的features的长度
     model = NeuralNet(tr_set.dataset.dim).to(device)  # Construct model and move to device
     # 训练并验证

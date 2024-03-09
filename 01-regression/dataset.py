@@ -1,14 +1,31 @@
 import csv
 
 import numpy as np
+import pandas as pd
 import torch
+from sklearn.feature_selection import SelectKBest
+from sklearn.feature_selection import f_regression
 from torch.utils.data import Dataset, DataLoader
-from transformers import AdamW, get_linear_schedule_with_warmup
 
 
-def prep_dataloader(path, mode, batch_size, n_jobs=0, target_only=False):
+def select_features(path):
+    data = pd.read_csv(path)
+    x = data[data.columns[1:94]]
+    y = data[data.columns[94]]
+    x = (x - x.min()) / (x.max() - x.min())
+    best_features = SelectKBest(score_func=f_regression)
+    fit = best_features.fit(x, y)
+    df_scores = pd.DataFrame(fit.scores_)
+    df_columns = pd.DataFrame(x.columns)
+    feature_scores = pd.concat([df_columns, df_scores], axis=1)
+    feature_scores.columns = ['Specs', 'Score']
+    print(feature_scores.nlargest(20, 'Score'))
+    return feature_scores.nlargest(20, 'Score').index.tolist()[:17]
+
+
+def prep_dataloader(path, feature_index_list, mode, batch_size, n_jobs=0, target_only=False):
     """ Generates a dataset, then is put into a dataloader. """
-    dataset = COVID19Dataset(path, mode=mode, target_only=target_only)  # Construct dataset
+    dataset = COVID19Dataset(path, feature_index_list, mode=mode, target_only=target_only)  # Construct dataset
     # shuffle为True表示在每个epoch开始前数据随机打乱；为False表示不打乱
     # drop_last为True，最后一个批次不满足batch_size时则丢弃；为False时，不丢弃
     # num_workers：使用多少个线程同时加载数据
@@ -20,7 +37,7 @@ def prep_dataloader(path, mode, batch_size, n_jobs=0, target_only=False):
 class COVID19Dataset(Dataset):
     """ Dataset for loading and preprocessing the COVID19 dataset """
 
-    def __init__(self, path, mode='train', target_only=False):
+    def __init__(self, path, feature_index_list, mode='train', target_only=False):
         self.mode = mode
         # Read data into numpy arrays
         # 读取csv文件中数据，剔除第一行和第一列
@@ -32,7 +49,8 @@ class COVID19Dataset(Dataset):
             features = list(range(93))
         else:
             # TODO: Using 40 states & 2 tested_positive features (indices = 57 & 75)
-            features = list(range(40)) + [57, 75]
+            # features = list(range(40)) + [57, 75]
+            features = feature_index_list
             # pass
 
         if mode == 'test':
