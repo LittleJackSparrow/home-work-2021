@@ -43,12 +43,13 @@ def train_val(config, model, train_set, val_set, train_loader, val_loader, devic
         # training
         model.train()  # set the model to training mode
         for i, data in enumerate(train_loader):
+            optimizer.zero_grad() # 梯度置0
             inputs, labels = data
             inputs, labels = inputs.to(device), labels.to(device)
-            optimizer.zero_grad()
-            outputs = model(inputs)
-            batch_loss = model.cal_loss(outputs, labels)
-            _, train_pred = torch.max(outputs, 1)  # get the index of the class with the highest probability
+            outputs = model(inputs)  # forward propagation
+            print(f'outputs.shape={outputs.shape}')
+            batch_loss = model.cal_loss(outputs, labels)  # compute the loss
+            _, train_pred = torch.max(outputs, 1)  # 只是做了每行取最大值的操作，(values:[每一行最大概率值的元组], indices:[每一行最大概率索引的元组])
             batch_loss.backward()
             optimizer.step()
 
@@ -68,7 +69,9 @@ def train_val(config, model, train_set, val_set, train_loader, val_loader, devic
 
                     val_acc += (val_pred.cpu() == labels.cpu()).sum().item()  # get the index of the class with the highest probability
                     val_loss += batch_loss.item()
-
+                # :03d ->:格式化字符串的开始 03表示如果输出的位数不足3位数，则在左侧用0补充，以满足位数 d输出整数
+                # :3.6f -> :格式化字符串的开始 3.6 3表示输出的最小宽度，如果不足3，在左侧用空格补充，6表示小数点最大的位，f表示输出浮点数
+                # train_loss / len(train_loader):表示每个批次的平均损失
                 print('[{:03d}/{:03d}] Train Acc: {:3.6f} Loss: {:3.6f} | Val Acc: {:3.6f} loss: {:3.6f}'.format(
                     epoch + 1, config["n_epochs"], train_acc / len(train_set), train_loss / len(train_loader), val_acc / len(val_set), val_loss / len(val_loader)
                 ))

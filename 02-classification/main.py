@@ -6,6 +6,10 @@ from model import Classifier, train_val, test_model
 import torch
 
 if __name__ == '__main__':
+    # Hint1：post-processing，后处理怎么处理？不懂
+    # Hint2：模型修改，layers,dimension,activation function
+    # Hint3: batch size?optimizer?lr?n_epochs?
+    # Hint4: batch norm?dropout?regularization?
     config = {
         "batch_size": 64,
         "n_epochs": 20,
