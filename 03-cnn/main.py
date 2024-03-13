@@ -1,5 +1,7 @@
 import torchvision.transforms as transforms
+import torchvision.models as models
 from torch.utils.data import DataLoader
+import torch.nn as nn
 from torchvision.datasets import DatasetFolder
 
 from dataset import prep_dataloader, image_loader
@@ -61,6 +63,10 @@ if __name__ == '__main__':
     # Initialize a model, and put it on the device specified.
     model = Classifier().to(device)
     model.device = device
+    # 使用resnet18替换自定义的模型
+    # resnet18 = models.resnet18(pretrained=False)
+    # in_features = resnet18.fc.in_features
+    # resnet18.fc = nn.Linear(in_features, 11)
     train_val(model, config, train_set, train_loader, unlabeled_loader, valid_loader, device)
 
     predictions = test(model, test_loader, device)

@@ -87,24 +87,23 @@ def get_pseudo_labels(dataloader, model, device, threshold=0.65):
 
         # Obtain the probability distributions by applying softmax on logits.
         probs = softmax(logits)
-
         # ---------- TODO ----------
         # Filter the data and construct a new dataset.
         # Iterate over each prediction probability.
-        for prob in probs:
-            # Check if the maximum probability exceeds the threshold.
-            if prob.max() > threshold:
-                # Get the index of the maximum probability as the predicted label.
-                pred_label = prob.argmax().item()
-                # Append the image and its predicted label to the pseudo-labeled lists.
-                pseudo_images.append(img)
-                pseudo_labels.append(pred_label)
+        # Check if at least one prediction probability exceeds the threshold.
+        if (probs.max(dim=1).values > threshold).any():
+            # Append the images and labels to the pseudo-labeled lists.
+            pseudo_images.append(img)
+            pseudo_labels.append(probs.argmax(dim=1))
 
-    # Convert the pseudo-labeled data to tensors.
-    pseudo_images = torch.cat(pseudo_images, dim=0)
-    pseudo_labels = torch.tensor(pseudo_labels)
-    # Create a new dataset using the pseudo-labeled data.
-    pseudo_dataset = torch.utils.data.TensorDataset(pseudo_images, pseudo_labels)
+    if pseudo_images:
+        # Convert the pseudo-labeled data to tensors.
+        pseudo_images = torch.cat(pseudo_images, dim=0)
+        pseudo_labels = torch.tensor(pseudo_labels)
+        # Create a new dataset using the pseudo-labeled data.
+        pseudo_dataset = torch.utils.data.TensorDataset(pseudo_images, pseudo_labels)
+    else:
+        pseudo_dataset = None
     # # Turn off the eval mode.
     model.train()
     return pseudo_dataset
