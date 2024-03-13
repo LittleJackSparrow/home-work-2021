@@ -58,7 +58,7 @@ class Classifier(nn.Module):
         return self.criterion(outputs, labels)
 
 
-def get_pseudo_labels(dataloader, dataset, model, device, threshold=0.65):
+def get_pseudo_labels(dataloader, model, device, threshold=0.65):
     # This functions generates pseudo-labels of a dataset using given model.
     # It returns an instance of DatasetFolder containing images whose prediction confidences exceed a given threshold.
     # You are NOT allowed to use any models trained on external data for pseudo-labeling.
@@ -68,6 +68,9 @@ def get_pseudo_labels(dataloader, dataset, model, device, threshold=0.65):
     # Define softmax function.
     softmax = nn.Softmax(dim=-1)
 
+    # Initialize lists to store pseudo-labeled data.
+    pseudo_images = []
+    pseudo_labels = []
     # Iterate over the dataset by batches.
     for batch in tqdm(dataloader):
         img, _ = batch
@@ -82,15 +85,29 @@ def get_pseudo_labels(dataloader, dataset, model, device, threshold=0.65):
 
         # ---------- TODO ----------
         # Filter the data and construct a new dataset.
+        # Iterate over each prediction probability.
+        for prob in probs:
+            # Check if the maximum probability exceeds the threshold.
+            if prob.max() > threshold:
+                # Get the index of the maximum probability as the predicted label.
+                pred_label = prob.argmax().item()
+                # Append the image and its predicted label to the pseudo-labeled lists.
+                pseudo_images.append(img)
+                pseudo_labels.append(pred_label)
 
+    # Convert the pseudo-labeled data to tensors.
+    pseudo_images = torch.cat(pseudo_images, dim=0)
+    pseudo_labels = torch.tensor(pseudo_labels)
+    # Create a new dataset using the pseudo-labeled data.
+    pseudo_dataset = torch.utils.data.TensorDataset(pseudo_images, pseudo_labels)
     # # Turn off the eval mode.
     model.train()
-    return dataset
+    return pseudo_dataset
 
 
-def train_val(model, config, train_set, train_loader, unlabeled_set, valid_loader, device):
+def train_val(model, config, train_set, train_loader, unlabeled_loader, valid_loader, device):
     # Initialize optimizer, you may fine-tune some hyperparameters such as learning rate on your own.
-    optimizer = getattr(torch.optim, config['optimizer'])(model.parameters, config['optim_hparas'])
+    optimizer = getattr(torch.optim, config['optimizer'])(model.parameters(), **config['optim_hparas'])
     # Whether to do semi-supervised learning.
     do_semi = False
     for epoch in range(config["n_epochs"]):
@@ -99,7 +116,7 @@ def train_val(model, config, train_set, train_loader, unlabeled_set, valid_loade
         # Then you can combine the labeled dataset and pseudo-labeled dataset for the training.
         if do_semi:
             # Obtain pseudo-labels for unlabeled data using trained model.
-            pseudo_set = get_pseudo_labels(unlabeled_set, model)
+            pseudo_set = get_pseudo_labels(unlabeled_loader, model)
             # Construct a new dataset and a data loader for training.
             # This is used in semi-supervised learning only.
             concat_dataset = ConcatDataset([train_set, pseudo_set])

@@ -12,8 +12,12 @@ from utils.settings import get_device
 # Please think about what kind of augmentation is helpful for food recognition.
 train_tfm = transforms.Compose([
     # Resize the image into a fixed shape (height = width = 128)
-    transforms.Resize((128, 128)),
+    transforms.Resize(128),
     # You may add some transforms here.
+    # randon clip 8*8 pixel
+    transforms.RandomCrop(16, padding=None),
+    # 50%的概率讲图片水平翻转，也就是左边移动到右边，右边移动到左边
+    transforms.RandomHorizontalFlip(p=0.5),
     # ToTensor() should be the last one of the transforms.
     transforms.ToTensor(),
 ])
@@ -43,7 +47,7 @@ if __name__ == '__main__':
     # The argument "loader" tells how torchvision reads the data.
     train_set, train_loader = prep_dataloader(path + "training/labeled", config, train_tfm)
     valid_set, valid_loader = prep_dataloader(path + "validation", config, test_tfm)
-    unlabeled_set = DatasetFolder(path + "training/unlabeled", loader=lambda x: Image.open(x), extensions=("jpg",), transform=train_tfm)
+    unlabeled_set, unlabeled_loader = prep_dataloader(path + "training/unlabeled", config, train_tfm)
     test_set = DatasetFolder(path + "testing", loader=lambda x: Image.open(x), extensions=("jpg",), transform=test_tfm)
     test_loader = DataLoader(test_set, batch_size=config['batch_size'], shuffle=False)
 
@@ -52,7 +56,7 @@ if __name__ == '__main__':
     # Initialize a model, and put it on the device specified.
     model = Classifier().to(device)
     model.device = device
-    train_val(model, config, train_set, train_loader, unlabeled_set, valid_loader, device)
+    train_val(model, config, train_set, train_loader, unlabeled_loader, valid_loader, device)
 
     predictions = test(model, test_loader, device)
     # Save predictions into the file.
