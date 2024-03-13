@@ -14,19 +14,23 @@ class Classifier(nn.Module):
 
         # input image size: [3, 128, 128]
         self.cnn_layers = nn.Sequential(
+            # 卷积层过后，向量shape变为64*128*128
             nn.Conv2d(3, 64, 3, 1, 1),
             nn.BatchNorm2d(64),
             nn.ReLU(),
+            # 最大池化层过后，向量shape变为64*64*64
             nn.MaxPool2d(2, 2, 0),
-
+            # 卷积层过后，向量shape变为128*64*64
             nn.Conv2d(64, 128, 3, 1, 1),
             nn.BatchNorm2d(128),
             nn.ReLU(),
+            # 最大池化层过后，向量shape变为128*32*32
             nn.MaxPool2d(2, 2, 0),
-
+            # 卷积层过后，向量shape变为256*32*32
             nn.Conv2d(128, 256, 3, 1, 1),
             nn.BatchNorm2d(256),
             nn.ReLU(),
+            # 最大池化层过后，向量shape变为256*8*8
             nn.MaxPool2d(4, 4, 0),
         )
         self.fc_layers = nn.Sequential(
@@ -48,6 +52,7 @@ class Classifier(nn.Module):
         x = self.cnn_layers(x)
 
         # The extracted feature map must be flatten before going to fully-connected layers.
+        # 256*8*8
         x = x.flatten(1)
 
         # The features are transformed by fully-connected layers to obtain the final logits.
@@ -109,14 +114,14 @@ def train_val(model, config, train_set, train_loader, unlabeled_loader, valid_lo
     # Initialize optimizer, you may fine-tune some hyperparameters such as learning rate on your own.
     optimizer = getattr(torch.optim, config['optimizer'])(model.parameters(), **config['optim_hparas'])
     # Whether to do semi-supervised learning.
-    do_semi = False
+    do_semi = True
     for epoch in range(config["n_epochs"]):
         # ---------- TODO ----------
         # In each epoch, relabel the unlabeled dataset for semi-supervised learning.
         # Then you can combine the labeled dataset and pseudo-labeled dataset for the training.
         if do_semi:
             # Obtain pseudo-labels for unlabeled data using trained model.
-            pseudo_set = get_pseudo_labels(unlabeled_loader, model)
+            pseudo_set = get_pseudo_labels(unlabeled_loader, model, device)
             # Construct a new dataset and a data loader for training.
             # This is used in semi-supervised learning only.
             concat_dataset = ConcatDataset([train_set, pseudo_set])

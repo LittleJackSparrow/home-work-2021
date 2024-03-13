@@ -1,9 +1,8 @@
 import torchvision.transforms as transforms
-from PIL import Image
 from torch.utils.data import DataLoader
 from torchvision.datasets import DatasetFolder
 
-from dataset import prep_dataloader
+from dataset import prep_dataloader, image_loader
 from model import Classifier, train_val, test
 from utils.settings import get_device
 
@@ -12,20 +11,26 @@ from utils.settings import get_device
 # Please think about what kind of augmentation is helpful for food recognition.
 train_tfm = transforms.Compose([
     # Resize the image into a fixed shape (height = width = 128)
-    transforms.Resize(128),
+    transforms.Resize((128, 128)),
     # You may add some transforms here.
     # randon clip 8*8 pixel
-    transforms.RandomCrop(16, padding=None),
-    # 50%的概率讲图片水平翻转，也就是左边移动到右边，右边移动到左边
+    # transforms.RandomCrop(16, padding=None),
+    # 50%的概率将图片水平翻转，也就是左边移动到右边，右边移动到左边
     transforms.RandomHorizontalFlip(p=0.5),
+    # 对图像进行颜色增强，主要是调整图像的亮度，亮度的变化范围在 [-0.5, 0.5] 之间
+    transforms.ColorJitter(brightness=0.5),
+    # 随机将图像沿着中心进行最多5度的随机旋转
+    transforms.RandomRotation(5),
+    # 随机选择图像的四个角点，并在这些角点周围进行透视变换，从而产生一个畸变的效果，使得图像看起来具有透视感
+    transforms.RandomPerspective(distortion_scale=0.5, p=0.5, interpolation=3),
     # ToTensor() should be the last one of the transforms.
-    transforms.ToTensor(),
+    transforms.ToTensor()
 ])
 # We don't need augmentations in testing and validation.
 # All we need here is to resize the PIL image and transform it into Tensor.
 test_tfm = transforms.Compose([
     transforms.Resize((128, 128)),
-    transforms.ToTensor(),
+    transforms.ToTensor()
 ])
 
 if __name__ == '__main__':
@@ -48,7 +53,7 @@ if __name__ == '__main__':
     train_set, train_loader = prep_dataloader(path + "training/labeled", config, train_tfm)
     valid_set, valid_loader = prep_dataloader(path + "validation", config, test_tfm)
     unlabeled_set, unlabeled_loader = prep_dataloader(path + "training/unlabeled", config, train_tfm)
-    test_set = DatasetFolder(path + "testing", loader=lambda x: Image.open(x), extensions=("jpg",), transform=test_tfm)
+    test_set = DatasetFolder(path + "testing", loader=image_loader, extensions=("jpg",), transform=test_tfm)
     test_loader = DataLoader(test_set, batch_size=config['batch_size'], shuffle=False)
 
     # "cuda" only when GPUs are available.

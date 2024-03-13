@@ -10,25 +10,42 @@ class Classifier(nn.Module):
         self.layer3 = nn.Linear(512, 128)
         self.out = nn.Linear(128, 39)
 
-        self.act_fn = nn.Sigmoid()
+        self.act_fn = nn.ReLU()
         self.criterion = nn.CrossEntropyLoss()
+        self.dropout = nn.Dropout(0.25)
+        self.batchnorm1 = nn.BatchNorm1d(1024)
+        self.batchnorm2 = nn.BatchNorm1d(512)
+        self.batchnorm3 = nn.BatchNorm1d(128)
 
     def forward(self, x):
         x = self.layer1(x)
+        x = self.batchnorm1(x)
+        x = self.dropout(x)
         x = self.act_fn(x)
 
         x = self.layer2(x)
+        x = self.batchnorm2(x)
+        x = self.dropout(x)
         x = self.act_fn(x)
 
         x = self.layer3(x)
+        x = self.batchnorm3(x)
+        x = self.dropout(x)
         x = self.act_fn(x)
 
         x = self.out(x)
 
         return x
 
-    def cal_loss(self, outputs, labels):
-        return self.criterion(outputs, labels)
+    def cal_loss(self, model, outputs, labels, device):
+        loss = self.criterion(outputs, labels)
+        lambda_reg = 0.00075
+        # 计算L2正则化项
+        l2_reg = torch.tensor(0.).to(device)
+        for param in model.parameters():
+            l2_reg += torch.norm(param, p=2)
+        loss += lambda_reg * l2_reg
+        return loss
 
 
 def train_val(config, model, train_set, val_set, train_loader, val_loader, device):
@@ -48,7 +65,7 @@ def train_val(config, model, train_set, val_set, train_loader, val_loader, devic
             inputs, labels = inputs.to(device), labels.to(device)
             outputs = model(inputs)  # forward propagation
             print(f'outputs.shape={outputs.shape}')
-            batch_loss = model.cal_loss(outputs, labels)  # compute the loss
+            batch_loss = model.cal_loss(model, outputs, labels, device)  # compute the loss
             _, train_pred = torch.max(outputs, 1)  # 只是做了每行取最大值的操作，(values:[每一行最大概率值的元组], indices:[每一行最大概率索引的元组])
             batch_loss.backward()
             optimizer.step()
@@ -64,7 +81,7 @@ def train_val(config, model, train_set, val_set, train_loader, val_loader, devic
                     inputs, labels = data
                     inputs, labels = inputs.to(device), labels.to(device)
                     outputs = model(inputs)
-                    batch_loss = model.cal_loss(outputs, labels)
+                    batch_loss = model.cal_loss(model, outputs, labels, device)
                     _, val_pred = torch.max(outputs, 1)
 
                     val_acc += (val_pred.cpu() == labels.cpu()).sum().item()  # get the index of the class with the highest probability
