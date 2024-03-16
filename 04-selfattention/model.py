@@ -11,6 +11,7 @@ class Classifier(nn.Module):
     def __init__(self, d_model=80, n_spks=600, dropout=0.1):
         super().__init__()
         # Project the dimension of features from that of input into d_model.
+        # 将输入特征的向量维度由40维映射到d_model维
         self.prenet = nn.Linear(40, d_model)
         # TODO:
         #   Change Transformer to Conformer.

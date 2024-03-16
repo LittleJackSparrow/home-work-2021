@@ -9,8 +9,8 @@ from utils.settings import get_device
 def parse_args():
     """arguments"""
     config = {
-        "data_dir": "./Dataset",
-        "save_path": "model.ckpt",
+        "data_dir": "../dataset/04-selfattention",
+        "save_path": "./models/model.ckpt",
         "batch_size": 32,
         "n_workers": 8,
         "valid_steps": 2000,

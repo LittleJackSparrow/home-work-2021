@@ -21,11 +21,7 @@ def parse_args():
     return config
 
 
-def main(
-        data_dir,
-        model_path,
-        output_path,
-):
+def main(data_dir, model_path, output_path):
     """Main function."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[Info]: Use {device} now!")
