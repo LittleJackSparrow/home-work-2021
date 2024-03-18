@@ -1,5 +1,14 @@
+import os
+
+import matplotlib.pyplot as plt
+import torch
 import torch.nn as nn
+import torchvision
+from torch.autograd import Variable
+from torch.utils.data import DataLoader
 from tqdm import tqdm
+
+from dataset import get_dataset
 
 
 def weights_init(m):
@@ -20,9 +29,9 @@ class Generator(nn.Module):
     def __init__(self, in_dim, dim=64):
         super(Generator, self).__init__()
 
-        def dconv_bn_relu(in_dim, out_dim):
+        def dconv_bn_relu(input_dim, out_dim):
             return nn.Sequential(
-                nn.ConvTranspose2d(in_dim, out_dim, 5, 2,
+                nn.ConvTranspose2d(input_dim, out_dim, 5, 2,
                                    padding=2, output_padding=1, bias=False),
                 nn.BatchNorm2d(out_dim),
                 nn.ReLU()
@@ -73,7 +82,7 @@ class Discriminator(nn.Module):
             conv_bn_lrelu(dim * 2, dim * 4),
             conv_bn_lrelu(dim * 4, dim * 8),
             nn.Conv2d(dim * 8, 1, 4),
-            nn.Sigmoid(),
+            # nn.Sigmoid(),
         )
         self.apply(weights_init)
 
@@ -82,15 +91,6 @@ class Discriminator(nn.Module):
         y = y.view(-1)
         return y
 
-
-from qqdm.notebook import qqdm
-from torch.autograd import Variable
-import torch
-import os
-from dataset import get_dataset
-from torch.utils.data import DataLoader
-import torchvision
-import matplotlib.pyplot as plt
 
 z_dim = 100
 workspace_dir = "D:/01-workspace/github/dataset/06-anima_face"
@@ -105,9 +105,9 @@ def train_base(device):
     lr = 1e-4
 
     """ Medium: WGAN, 50 epoch, n_critic=5, clip_value=0.01 """
-    n_epoch = 1  # 50
-    n_critic = 1  # 5
-    # clip_value = 0.01
+    n_epoch = 50  # 50
+    n_critic = 5  # 5
+    clip_value = 0.01
 
     log_dir = os.path.join(workspace_dir, 'logs')
 
@@ -127,19 +127,19 @@ def train_base(device):
     # Adam：动量+自适应率学习率
     # RMSprop：自适应率学习率
     # Optimizer
-    opt_D = torch.optim.Adam(D.parameters(), lr=lr, betas=(0.5, 0.999))
-    opt_G = torch.optim.Adam(G.parameters(), lr=lr, betas=(0.5, 0.999))
-    # opt_D = torch.optim.RMSprop(D.parameters(), lr=lr)
-    # opt_G = torch.optim.RMSprop(G.parameters(), lr=lr)
+    # opt_D = torch.optim.Adam(D.parameters(), lr=lr, betas=(0.5, 0.999))
+    # opt_G = torch.optim.Adam(G.parameters(), lr=lr, betas=(0.5, 0.999))
+    opt_D = torch.optim.RMSprop(D.parameters(), lr=lr)
+    opt_G = torch.optim.RMSprop(G.parameters(), lr=lr)
 
     # DataLoader
     dataset = get_dataset(os.path.join(workspace_dir, 'faces'))
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=2)
-    return dataloader, G, opt_G, D, opt_D, criterion, n_epoch, n_critic, z_sample, log_dir, dataloader
+    return dataloader, G, opt_G, D, opt_D, criterion, n_epoch, n_critic, z_sample, log_dir, dataloader, clip_value
 
 
 def train_loop(device):
-    dataloader, G, opt_G, D, opt_D, criterion, n_epoch, n_critic, z_sample, log_dir, dataloader = train_base(device)
+    dataloader, G, opt_G, D, opt_D, criterion, n_epoch, n_critic, z_sample, log_dir, dataloader, clip_value = train_base(device)
     steps = 0
     # epoch_index：索引 epoch：具体迭代的值
     for epoch_index, epoch in enumerate(range(n_epoch)):
@@ -159,22 +159,22 @@ def train_loop(device):
             f_imgs = G(z)
 
             """ Medium: Use WGAN Loss. """
-            # Label
-            r_label = torch.ones((batch_size)).to(device)
-            f_label = torch.zeros((batch_size)).to(device)
-
-            # Model forwarding
-            # detach()：分离后的tensor不再具有梯度信息
-            r_logit = D(r_imgs.detach())
-            f_logit = D(f_imgs.detach())
-
-            # Compute the loss for the discriminator.
-            r_loss = criterion(r_logit, r_label)
-            f_loss = criterion(f_logit, f_label)
-            loss_D = (r_loss + f_loss) / 2
+            # # Label
+            # r_label = torch.ones((batch_size)).to(device)
+            # f_label = torch.zeros((batch_size)).to(device)
+            #
+            # # Model forwarding
+            # # detach()：分离后的tensor不再具有梯度信息
+            # r_logit = D(r_imgs.detach())
+            # f_logit = D(f_imgs.detach())
+            #
+            # # Compute the loss for the discriminator.
+            # r_loss = criterion(r_logit, r_label)
+            # f_loss = criterion(f_logit, f_label)
+            # loss_D = (r_loss + f_loss) / 2
 
             # WGAN Loss
-            # loss_D = -torch.mean(D(r_imgs)) + torch.mean(D(f_imgs))
+            loss_D = -torch.mean(D(r_imgs)) + torch.mean(D(f_imgs))
 
             # Model backwarding
             D.zero_grad()
@@ -184,8 +184,8 @@ def train_loop(device):
             opt_D.step()
 
             """ Medium: Clip weights of discriminator. """
-            # for p in D.parameters():
-            #    p.data.clamp_(-clip_value, clip_value)
+            for p in D.parameters():
+                p.data.clamp_(-clip_value, clip_value)
 
             # ============================================
             #  Train G
@@ -196,13 +196,13 @@ def train_loop(device):
                 f_imgs = G(z)
 
                 # Model forwarding
-                f_logit = D(f_imgs)
+                # f_logit = D(f_imgs)
 
                 """ Medium: Use WGAN Loss"""
                 # Compute the loss for the generator.
-                loss_G = criterion(f_logit, r_label)
+                # loss_G = criterion(f_logit, r_label)
                 # WGAN Loss
-                # loss_G = -torch.mean(D(f_imgs))
+                loss_G = -torch.mean(D(f_imgs))
 
                 # Model backwarding
                 G.zero_grad()

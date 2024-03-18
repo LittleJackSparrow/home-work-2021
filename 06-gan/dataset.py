@@ -14,9 +14,9 @@ class CrypkoDataset(Dataset):
         self.num_samples = len(self.fnames)
 
     def __getitem__(self, idx):
-        fname = self.fnames[idx]
+        file_name = self.fnames[idx]
         # 1. Load the image
-        img = torchvision.io.read_image(fname)
+        img = torchvision.io.read_image(file_name)
         # 2. Resize and normalize the images using torchvision.
         img = self.transform(img)
         return img
@@ -26,7 +26,7 @@ class CrypkoDataset(Dataset):
 
 
 def get_dataset(root):
-    fnames = glob.glob(os.path.join(root, '*'))
+    file_names = glob.glob(os.path.join(root, '*'))
     # 1. Resize the image to (64, 64)
     # 2. Linearly map [0, 1] to [-1, 1]
     compose = [
@@ -36,8 +36,7 @@ def get_dataset(root):
         transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),
     ]
     transform = transforms.Compose(compose)
-    dataset = CrypkoDataset(fnames, transform)
-    return dataset
+    return CrypkoDataset(file_names, transform)
 
 
 if __name__ == '__main__':
