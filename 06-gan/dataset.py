@@ -8,13 +8,13 @@ from torch.utils.data import Dataset
 
 
 class CrypkoDataset(Dataset):
-    def __init__(self, fnames, transform):
+    def __init__(self, file_names, transform):
         self.transform = transform
-        self.fnames = fnames
-        self.num_samples = len(self.fnames)
+        self.file_names = file_names
+        self.num_samples = len(self.file_names)
 
     def __getitem__(self, idx):
-        file_name = self.fnames[idx]
+        file_name = self.file_names[idx]
         # 1. Load the image
         img = torchvision.io.read_image(file_name)
         # 2. Resize and normalize the images using torchvision.
@@ -28,6 +28,7 @@ class CrypkoDataset(Dataset):
 def get_dataset(root):
     file_names = glob.glob(os.path.join(root, '*'))
     # 1. Resize the image to (64, 64)
+    # 批量归一化之后的数据一般都在[0, 1]之间，做-0.5，然后除以0.5的操作，可以把数据移动到[-1, 1]之间
     # 2. Linearly map [0, 1] to [-1, 1]
     compose = [
         transforms.ToPILImage(),

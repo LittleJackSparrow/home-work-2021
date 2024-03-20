@@ -46,14 +46,20 @@ class Generator(nn.Module):
             dconv_bn_relu(dim * 8, dim * 4),
             dconv_bn_relu(dim * 4, dim * 2),
             dconv_bn_relu(dim * 2, dim),
+            # 最后一次经过反卷积层后不需要再进行批量归一化，是因为每个像素点都是独立的，并不需要通过批量归一化提升特征的表示能力
             nn.ConvTranspose2d(dim, 3, 5, 2, padding=2, output_padding=1),
+            # Tanh激活函数的作用是将生成的向量值限制在[-1, 1]的范围内
             nn.Tanh()
         )
+        # 随机初始化权重
         self.apply(weights_init)
 
     def forward(self, x):
+        # input:64 * 100  output:64 * dim * 8 * 4 * 4
         y = self.l1(x)
+        # input: 64 * dim * 8 * 4 * 4 output: 64 * 512 * 4 * 4
         y = y.view(y.size(0), -1, 4, 4)
+        # input: 通道数512=dim*8
         y = self.l2_5(y)
         return y
 
@@ -69,19 +75,19 @@ class Discriminator(nn.Module):
 
         def conv_bn_lrelu(in_dim, out_dim):
             return nn.Sequential(
-                nn.Conv2d(in_dim, out_dim, 5, 2, 2),
+                nn.utils.spectral_norm(nn.Conv2d(in_dim, out_dim, 5, 2, 2)),
                 nn.BatchNorm2d(out_dim),
                 nn.LeakyReLU(0.2),
             )
 
         """ Medium: Remove the last sigmoid layer for WGAN. """
         self.ls = nn.Sequential(
-            nn.Conv2d(in_dim, dim, 5, 2, 2),
+            nn.utils.spectral_norm(nn.Conv2d(in_dim, dim, 5, 2, 2)),
             nn.LeakyReLU(0.2),
             conv_bn_lrelu(dim, dim * 2),
             conv_bn_lrelu(dim * 2, dim * 4),
             conv_bn_lrelu(dim * 4, dim * 8),
-            nn.Conv2d(dim * 8, 1, 4),
+            nn.utils.spectral_norm(nn.Conv2d(dim * 8, 1, 4)),
             # nn.Sigmoid(),
         )
         self.apply(weights_init)
@@ -127,19 +133,34 @@ def train_base(device):
     # Adam：动量+自适应率学习率
     # RMSprop：自适应率学习率
     # Optimizer
-    # opt_D = torch.optim.Adam(D.parameters(), lr=lr, betas=(0.5, 0.999))
-    # opt_G = torch.optim.Adam(G.parameters(), lr=lr, betas=(0.5, 0.999))
-    opt_D = torch.optim.RMSprop(D.parameters(), lr=lr)
-    opt_G = torch.optim.RMSprop(G.parameters(), lr=lr)
+    opt_D = torch.optim.Adam(D.parameters(), lr=lr, betas=(0.5, 0.999))
+    opt_G = torch.optim.Adam(G.parameters(), lr=lr, betas=(0.5, 0.999))
+    # opt_D = torch.optim.RMSprop(D.parameters(), lr=lr)
+    # opt_G = torch.optim.RMSprop(G.parameters(), lr=lr)
 
     # DataLoader
     dataset = get_dataset(os.path.join(workspace_dir, 'faces'))
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=2)
-    return dataloader, G, opt_G, D, opt_D, criterion, n_epoch, n_critic, z_sample, log_dir, dataloader, clip_value
+    return dataloader, G, opt_G, D, opt_D, criterion, n_epoch, n_critic, z_sample, log_dir, clip_value
+
+
+lambda_gp = 1
+
+
+# Calculate the gradient penalty
+def compute_gradient_penalty(D, real_samples, fake_samples):
+    alpha = torch.rand(real_samples.size(0), 1, 1, 1).to(real_samples.device)
+    interpolates = (alpha * real_samples + ((1 - alpha) * fake_samples)).requires_grad_(True)
+    d_interpolates = D(interpolates)
+    gradients = torch.autograd.grad(outputs=d_interpolates, inputs=interpolates,
+                                    grad_outputs=torch.ones(d_interpolates.size()).to(real_samples.device),
+                                    create_graph=True, retain_graph=True, only_inputs=True)[0]
+    gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
+    return gradient_penalty
 
 
 def train_loop(device):
-    dataloader, G, opt_G, D, opt_D, criterion, n_epoch, n_critic, z_sample, log_dir, dataloader, clip_value = train_base(device)
+    dataloader, G, opt_G, D, opt_D, criterion, n_epoch, n_critic, z_sample, log_dir, clip_value = train_base(device)
     steps = 0
     # epoch_index：索引 epoch：具体迭代的值
     for epoch_index, epoch in enumerate(range(n_epoch)):
@@ -172,9 +193,9 @@ def train_loop(device):
             # r_loss = criterion(r_logit, r_label)
             # f_loss = criterion(f_logit, f_label)
             # loss_D = (r_loss + f_loss) / 2
-
-            # WGAN Loss
-            loss_D = -torch.mean(D(r_imgs)) + torch.mean(D(f_imgs))
+            gradient_penalty = compute_gradient_penalty(D, r_imgs.data, f_imgs.data)
+            # WGAN Loss 加上gradient penalty才是真的WGAN
+            loss_D = -torch.mean(D(r_imgs)) + torch.mean(D(f_imgs)) + lambda_gp * gradient_penalty
 
             # Model backwarding
             D.zero_grad()
@@ -184,8 +205,9 @@ def train_loop(device):
             opt_D.step()
 
             """ Medium: Clip weights of discriminator. """
-            for p in D.parameters():
-                p.data.clamp_(-clip_value, clip_value)
+            """ 最初的WGAN就是使用的裁剪 """
+            # for p in D.parameters():
+            #     p.data.clamp_(-clip_value, clip_value)
 
             # ============================================
             #  Train G
